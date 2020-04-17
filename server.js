@@ -36,37 +36,35 @@ function searchLocation (request, response) {
     let key = process.env.GEO_CODE_API;
     const url = `https://us1.locationiq.com/v1/search.php?key=${key}&q=${city}&format=json&limit=1`;
     console.log('city', city)
+
+    //query to search DB
     let sql = `SELECT * FROM locations WHERE search_query =$1;`;
     let safeValues = [city];
 
     client.query(sql, safeValues)
         .then(results => {
-            if (results.rows.length > 0) {
+            if (results.rows[0]) {
                 response.send(results.rows[0]);
             }else {
                 superagent.get(url)
-                    .then(results => {
-                    let searchCity = results.body[0];
-                    // console.log('searchCity', searchCity);
-                    let location = new City(city, searchCity);
+                    .then(results => {      
+                    let obj = results.body[0];
+                    let location = new City(city, obj);
 
-                response.status(200).send(location);
+                    response.status(200).send(location);
+                    
+                    let sql = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4);`;
+                    let safeValues = [city, location.formatted_query, location.latitude, location.longitude];
 
-                let sql = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4);';
-                let safeValues = [city, location.formatted_query, location.latitude, location.longitude];
+                    client.query(sql, safeValues);
 
-                client.query(sql, safeValues);
-
-            }).catch(err => {
-                console.log('No trails for you!', err);
+                    }).catch(err => {
+                console.log('No locations for you!', err);
                 response.status(500).send(err);
                 })
-}
-
             }
-
-
         })
+}
         
 
     
@@ -112,6 +110,11 @@ function getTrails (request, response) {
         })
 
 }
+
+function handleErrors(error, request, response) {
+    response.status(500).send('I\'m not feeling so well.');
+}
+
 
 // **** Constructor Functions ****
 

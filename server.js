@@ -26,7 +26,8 @@ const PORT= process.env.PORT || 3005;
 
 
 // // require('./js/location');
-// const searchLocation = require('./js/location.js'); // Tried to get this to work. After talking with Jacob, he said this should be a stretch goal.
+// const searchLocation = require('./js/location.js'); 
+// Tried to get this to work. After talking with Jacob, he said this should be a stretch goal.
 
 // **** Routes ****
 app.get('/location', searchLocation);

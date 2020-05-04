@@ -23,21 +23,28 @@ app.use(cors());
 //Establish the PORT
 const PORT= process.env.PORT || 3005;
 
+
+
+// // require('./js/location');
+// const searchLocation = require('./js/location.js'); 
+// Tried to get this to work. After talking with Jacob, he said this should be a stretch goal.
+
 // **** Routes ****
 app.get('/location', searchLocation);
 app.get('/weather', getWeather);
 app.get('/trails', getTrails);
-
+app.get('/movies', getMovies);
+app.get('/yelp', handleYelp);
 
 // **** Callback Functions ****
-function searchLocation (request, response) {
-    
+
+// Get location data
+function searchLocation (request, response) {    
     let city = request.query.city;
     let key = process.env.GEO_CODE_API;
-    const url = `https://us1.locationiq.com/v1/search.php?key=${key}&q=${city}&format=json&limit=1`;
-    console.log('city', city)
+    const url = `https://us1.locationiq.com/v1/search.php?key=${key}&q=${city}&format=json&limit=1`;    
 
-    //query to search DB
+    // Query to search DB
     let sql = `SELECT * FROM locations WHERE search_query =$1;`;
     let safeValues = [city];
 
@@ -59,62 +66,80 @@ function searchLocation (request, response) {
                     client.query(sql, safeValues);
 
                     }).catch(err => {
-                console.log('No locations for you!', err);
-                response.status(500).send(err);
+                    response.status(500).send(err);
                 })
             }
         })
 }
-        
 
-    
-
-function getWeather (request, response) {    
-   
+// Get weather data
+function getWeather (request, response) {  
     let {search_query, formatted_query, latitude, longitude} = request.query;
-    console.log('In the clouds', request.query);
-    let key = process.env.WEATHER_API;
-    console.log(key);
-    console.log(latitude, longitude);
+    let key = process.env.WEATHER_API_KEY;   
     let url = `https://api.weatherbit.io/v2.0/forecast/daily?lat=${latitude}&lon=${longitude}&key=${key}&days=7`;
-    
-    console.log('gimme my damn link info', url);   
 
     superagent.get(url)
         .then((results) => { 
-            console.log('I made it!!') ;  
             const weatherArray = results.body.data; 
-            console.log('Hello, from the clouds', results.body.data)
-            let newWeatherArray = weatherArray.map((day) => {
-            return new Weather(day);       
-            });
+            let newWeatherArray = weatherArray.map((day) => new Weather(day));
             response.status(200).send(newWeatherArray);
     }).catch(err => {
-        console.log('No weather there. Weid, right?', err);
         response.status(500).send(err);
         })
 }
 
+// Get trail data
 function getTrails (request, response) {
     let {latitude, longitude} = request.query;
     let key = process.env.TRAILS_API_KEY;
     let url = `https://www.hikingproject.com/data/get-trails?lat=${latitude}&lon=${longitude}&maxDistance=10&key=${key}`;
+    
     superagent.get(url)
-    .then(results => {
+        .then(results => {
             let trails = results.body.trails;
             const trailsArr = trails.map(trail => new Trail(trail));
             response.status(200).send(trailsArr);
         }).catch(err => {
-            console.log('No trails for you!', err);
             response.status(500).send(err);
         })
-
 }
 
+// Get movie data
+function getMovies (request, response) {
+    let city = request.query.search_query;
+    let key = process.env.MOVIE_API_KEY;
+    let url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${city}`;
+   
+    superagent.get(url)
+        .then(movieResults => {   
+            let movie = movieResults.body.results;          
+            let mustSee = movie.map(obj => new Movie(obj));
+          
+            response.status(200).send(mustSee);
+        }).catch(err => {
+            response.status(500).send(err);
+        })
+    }
+        
+// Get Yelp data     
+function handleYelp(request, response){
+    let city = request.query.city;
+    let url = `https://api.yelp.com/v3/businesses/search?location=${city}&term=restaurants`;
+  
+    superagent.get(url)
+      .set({
+          "Authorization": `Bearer ${process.env.YELP_API_KEY}`
+        })
+      .then(results => {        
+        let review = results.body.businesses.map(obj => new Yelp(obj));
+        response.status(200).send(review);
+    })
+  }
+
+// Error handling. 
 function handleErrors(error, request, response) {
     response.status(500).send('I\'m not feeling so well.');
 }
-
 
 // **** Constructor Functions ****
 
@@ -141,6 +166,24 @@ function Trail(obj) {
     this.conditions = obj.conditionStatus;
     this.condition_date = obj.conditionDate.slice(0,10);
     this.condition_time = obj.conditionDate.slice(11,19);
+}
+
+function Movie(obj) {
+    this.title = obj.title;
+    this.overview = obj.overview;
+    this.average_votes = obj.vote_average;
+    this.total_votes = obj.vote_count;
+    this.image_url = `https://image.tmdb.org/t/p/w500${obj.poster_path}`;
+    this.popularity = obj.popularity;
+    this.released_on = obj.released_on;
+}
+
+function Yelp(obj){
+    this.name = obj.name;
+    this.image_url = obj.image_url;
+    this.price = obj.price;
+    this.rating = obj.rating;
+    this.url = obj.url;
 }
 
 // **** Is it turned on? ****
